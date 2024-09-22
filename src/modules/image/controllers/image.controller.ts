@@ -74,7 +74,7 @@ export class ImageController {
     }
 
     // Determine the actual format from the image buffer
-    let actualFormat = 'jpeg'; // Default
+    let actualFormat = 'jpeg';
     if (format) {
       actualFormat = format.toLowerCase();
     } else {

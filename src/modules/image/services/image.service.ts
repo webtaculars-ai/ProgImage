@@ -53,6 +53,13 @@ export class ImageService {
       if (format) {
         const normalizedFormat = this.normalizeFormat(format);
         const currentFormat = path.extname(file).slice(1).toLowerCase();
+
+        // Check for unsupported formats
+        const allowedFormats = ['jpeg', 'png', 'webp', 'tiff', 'gif'];
+        if (!allowedFormats.includes(normalizedFormat)) {
+          throw new BadRequestException(`Unsupported image format ${format}`);
+        }
+
         if (currentFormat !== normalizedFormat) {
           image = await this.convertImageFormat(image, normalizedFormat);
           this.logger.log(
@@ -64,7 +71,7 @@ export class ImageService {
       return image;
     } catch (error) {
       this.logger.error(`Error retrieving image with ID ${id}:`, error);
-      return null;
+      throw new BadRequestException(error || 'Failed to retrieve image');
     }
   }
 
