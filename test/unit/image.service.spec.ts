@@ -1,24 +1,29 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ImageService } from '../../src/modules/image/services/image.service';
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as sharp from 'sharp';
 
 describe('ImageService', () => {
   let service: ImageService;
   const storagePath = path.join(__dirname, '../../../storage');
-
-  beforeAll(() => {
-    if (!fs.existsSync(storagePath)) {
-      fs.mkdirSync(storagePath, { recursive: true });
+  beforeAll(async () => {
+    try {
+      await fs.mkdir(storagePath, { recursive: true });
+    } catch (error) {
+      console.error('Error creating storage directory:', error);
     }
   });
 
-  afterEach(() => {
-    // Clean up storage after each test
-    const files = fs.readdirSync(storagePath);
-    for (const file of files) {
-      fs.unlinkSync(path.join(storagePath, file));
+  afterEach(async () => {
+    try {
+      const files = await fs.readdir(storagePath);
+      const unlinkPromises = files.map((file) =>
+        fs.unlink(path.join(storagePath, file)),
+      );
+      await Promise.all(unlinkPromises);
+    } catch (error) {
+      console.error('Error cleaning storage directory:', error);
     }
   });
 
@@ -36,7 +41,7 @@ describe('ImageService', () => {
       buffer: Buffer.from('dummy data'),
     } as Express.Multer.File;
 
-    const id = service.saveImage(dummyFile);
+    const id = await service.saveImage(dummyFile);
     expect(id).toBeDefined();
 
     const retrieved = await service.getImage(id);
@@ -44,23 +49,21 @@ describe('ImageService', () => {
   });
 
   it('should convert image format', async () => {
-    // Use a real image buffer for accurate testing
     const imagePath = path.join(__dirname, '../test-images/sample.jpeg');
-    const imageBuffer = fs.readFileSync(imagePath);
+    const imageBuffer = await fs.readFile(imagePath);
 
     const dummyFile = {
       originalname: 'sample.jpeg',
       buffer: imageBuffer,
     } as Express.Multer.File;
 
-    const id = service.saveImage(dummyFile);
+    const id = await service.saveImage(dummyFile);
     expect(id).toBeDefined();
 
     const pngImageBuffer = await service.getImage(id, 'png');
     expect(pngImageBuffer).toBeInstanceOf(Buffer);
     expect(pngImageBuffer.length).toBeGreaterThan(0);
 
-    // Verify that the converted image is indeed a PNG
     const metadata = await sharp(pngImageBuffer).metadata();
     expect(metadata.format).toBe('png');
   });
@@ -72,27 +75,19 @@ describe('ImageService', () => {
   });
 
   it('should handle unsupported format gracefully', async () => {
-    // Use a real image buffer for accurate testing
     const imagePath = path.join(__dirname, '../test-images/sample.jpeg');
-    const imageBuffer = fs.readFileSync(imagePath);
+    const imageBuffer = await fs.readFile(imagePath);
 
     const dummyFile = {
       originalname: 'sample.jpeg',
       buffer: imageBuffer,
     } as Express.Multer.File;
 
-    const id = service.saveImage(dummyFile);
+    const id = await service.saveImage(dummyFile);
     expect(id).toBeDefined();
 
-    // Attempt to convert to an unsupported format
     const unsupportedFormat = 'unsupportedformat';
-    try {
-      await service.getImage(id, unsupportedFormat);
-      // If no error is thrown, fail the test
-      fail('Expected an error to be thrown for unsupported format');
-    } catch (error) {
-      expect(error).toBeDefined();
-      // Depending on implementation, check for specific error types or messages
-    }
+
+    await expect(service.getImage(id, unsupportedFormat)).rejects.toThrow();
   });
 });
