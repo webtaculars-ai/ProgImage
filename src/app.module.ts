@@ -1,8 +1,16 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import configuration from './config/configuration';
 import { ImageModule } from './modules/image/image.module';
 
 @Module({
-  imports: [ImageModule],
+  imports: [
+    ConfigModule.forRoot({
+      load: [configuration],
+      isGlobal: true,
+    }),
+    ImageModule,
+  ],
   controllers: [],
   providers: [],
 })
