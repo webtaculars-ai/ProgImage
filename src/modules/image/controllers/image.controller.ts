@@ -11,9 +11,18 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ImageService } from '../services/image.service';
 import { Response } from 'express';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiConsumes,
+  ApiBody,
+  ApiParam,
+} from '@nestjs/swagger';
 import { extname } from 'path';
 import * as fs from 'fs/promises';
 
+@ApiTags('images')
 @Controller('images')
 export class ImageController {
   constructor(private readonly imageService: ImageService) {}
@@ -26,6 +35,26 @@ export class ImageController {
    */
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Upload an image' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Image file to upload',
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Image uploaded successfully',
+    schema: { example: { id: 'generated-unique-id' } },
+  })
+  @ApiResponse({ status: 400, description: 'Bad Request' })
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('File is required');
@@ -57,6 +86,19 @@ export class ImageController {
    * @param res - The Express response object.
    */
   @Get(':id.:format?')
+  @ApiOperation({
+    summary: 'Retrieve an image with optional format conversion',
+  })
+  @ApiParam({ name: 'id', description: 'Unique identifier of the image' })
+  @ApiParam({
+    name: 'format',
+    description: 'Desired image format (e.g., png, webp)',
+    required: false,
+  })
+  @ApiResponse({ status: 200, description: 'Image retrieved successfully' })
+  @ApiResponse({ status: 400, description: 'Unsupported image format' })
+  @ApiResponse({ status: 404, description: 'Image not found' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
   async getImage(
     @Param('id') id: string,
     @Param('format') format: string,
@@ -74,7 +116,7 @@ export class ImageController {
     }
 
     // Determine the actual format from the image buffer
-    let actualFormat = 'jpeg';
+    let actualFormat = 'jpeg'; // Default
     if (format) {
       actualFormat = format.toLowerCase();
     } else {
