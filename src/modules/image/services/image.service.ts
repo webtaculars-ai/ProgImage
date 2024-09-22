@@ -1,7 +1,9 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import * as fs from 'fs/promises';
+import * as fs from 'fs';
+import * as fsPromises from 'fs/promises';
 import * as path from 'path';
+import { Readable } from 'stream';
 import * as sharp from 'sharp';
 import { ConfigService } from '@nestjs/config';
 
@@ -14,7 +16,8 @@ export class ImageService {
     this.storagePath = path.resolve(
       this.configService.get<string>('storagePath') || 'storage',
     );
-    fs.mkdir(this.storagePath, { recursive: true })
+    fsPromises
+      .mkdir(this.storagePath, { recursive: true })
       .then(() =>
         this.logger.log(`Storage directory set at ${this.storagePath}`),
       )
@@ -28,27 +31,32 @@ export class ImageService {
     const id = uuidv4();
     const extension = path.extname(file.originalname).toLowerCase();
     const filename = `${id}${extension}`;
-    try {
-      await fs.writeFile(path.join(this.storagePath, filename), file.buffer);
-      this.logger.log(`Image saved with ID: ${id}`);
-      return id;
-    } catch (error) {
-      this.logger.error(`Error saving image with ID ${id}:`, error);
-      throw new BadRequestException('Failed to save image');
-    }
+    const filePath = path.join(this.storagePath, filename);
+
+    return new Promise((resolve, reject) => {
+      const writeStream = fs.createWriteStream(filePath);
+      const readStream = new Readable();
+      readStream.push(file.buffer);
+      readStream.push(null);
+
+      readStream
+        .pipe(writeStream)
+        .on('finish', () => resolve(id))
+        .on('error', reject);
+    });
   }
 
   // Retrieve the image by ID and desired format
   async getImage(id: string, format?: string): Promise<Buffer | null> {
     try {
-      const files = await fs.readdir(this.storagePath);
+      const files = await fsPromises.readdir(this.storagePath);
       const file = files.find((f) => f.startsWith(id));
       if (!file) {
         this.logger.warn(`Image not found with ID: ${id}`);
         return null;
       }
       const filePath = path.join(this.storagePath, file);
-      let image = await fs.readFile(filePath);
+      let image = await fsPromises.readFile(filePath);
 
       if (format) {
         const normalizedFormat = this.normalizeFormat(format);
