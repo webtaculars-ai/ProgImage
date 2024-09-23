@@ -109,4 +109,18 @@ describe('ImageService', () => {
       `Unsupported image format`,
     );
   });
+
+  it('should successfully upload a large image', async () => {
+    const largeImageBuffer = Buffer.alloc(10 * 1024 * 1024); // Create a 10MB dummy buffer
+    const largeFile = {
+      originalname: 'large_test.jpg',
+      buffer: largeImageBuffer,
+    } as Express.Multer.File;
+
+    const id = await service.saveImage(largeFile);
+    expect(id).toBeDefined();
+
+    const retrieved = await service.getImage(id);
+    expect(retrieved).toEqual(largeFile.buffer);
+  });
 });
