@@ -3,12 +3,12 @@ import {
   Post,
   Get,
   Param,
-  UploadedFile,
+  UploadedFiles,
   UseInterceptors,
   Res,
   BadRequestException,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { ImageService } from '../services/image.service';
 import { Response } from 'express';
 import {
@@ -34,33 +34,36 @@ export class ImageController {
    * @returns An object containing the unique ID of the uploaded image.
    */
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file'))
-  @ApiOperation({ summary: 'Upload an image' })
+  @UseInterceptors(FilesInterceptor('files', 10)) // Allow up to 10 files
+  @ApiOperation({ summary: 'Upload multiple images' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
-    description: 'Image file to upload',
+    description: 'Multiple image files to upload',
     schema: {
       type: 'object',
       properties: {
-        file: {
-          type: 'string',
-          format: 'binary',
+        files: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
         },
       },
     },
   })
   @ApiResponse({
     status: 201,
-    description: 'Image uploaded successfully',
-    schema: { example: { id: 'generated-unique-id' } },
+    description: 'Images uploaded successfully',
+    schema: {
+      example: [
+        { id: 'generated-unique-id-1' },
+        { id: 'generated-unique-id-2' },
+      ],
+    },
   })
-  @ApiResponse({ status: 400, description: 'Bad Request' })
-  async uploadImage(@UploadedFile() file: Express.Multer.File) {
-    if (!file) {
-      throw new BadRequestException('File is required');
+  async uploadImages(@UploadedFiles() files: Express.Multer.File[]) {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('At least one file is required');
     }
 
-    // Validate file type
     const allowedExtensions = [
       '.jpg',
       '.jpeg',
@@ -69,13 +72,18 @@ export class ImageController {
       '.tiff',
       '.gif',
     ];
-    const fileExt = extname(file.originalname).toLowerCase();
-    if (!allowedExtensions.includes(fileExt)) {
-      throw new BadRequestException('Unsupported file type');
-    }
 
-    const id = await this.imageService.saveImage(file);
-    return { id };
+    const results = await Promise.all(
+      files.map((file) => {
+        const fileExt = extname(file.originalname).toLowerCase();
+        if (!allowedExtensions.includes(fileExt)) {
+          throw new BadRequestException(`Unsupported file type: ${fileExt}`);
+        }
+        return this.imageService.saveImage(file);
+      }),
+    );
+
+    return results.map((id) => ({ id }));
   }
 
   /**
