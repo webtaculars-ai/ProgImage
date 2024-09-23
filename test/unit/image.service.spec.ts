@@ -111,7 +111,7 @@ describe('ImageService', () => {
   });
 
   it('should successfully upload a large image', async () => {
-    const largeImageBuffer = Buffer.alloc(10 * 1024 * 1024); // Create a 10MB dummy buffer
+    const largeImageBuffer = Buffer.alloc(10 * 1024 * 1024);
     const largeFile = {
       originalname: 'large_test.jpg',
       buffer: largeImageBuffer,
@@ -122,5 +122,24 @@ describe('ImageService', () => {
 
     const retrieved = await service.getImage(id);
     expect(retrieved).toEqual(largeFile.buffer);
+  });
+
+  it('should handle concurrent image uploads', async () => {
+    const files = Array.from({ length: 10 }).map((_, i) => ({
+      originalname: `image_${i}.jpg`,
+      buffer: Buffer.alloc(1 * 1024 * 1024),
+    })) as Express.Multer.File[];
+
+    const uploadPromises = files.map((file) => service.saveImage(file));
+    const ids = await Promise.all(uploadPromises);
+
+    ids.forEach((id) => expect(id).toBeDefined());
+
+    const retrievalPromises = ids.map((id) => service.getImage(id));
+    const images = await Promise.all(retrievalPromises);
+
+    images.forEach((image, index) => {
+      expect(image).toEqual(files[index].buffer);
+    });
   });
 });
